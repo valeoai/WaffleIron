@@ -29,8 +29,12 @@ pip install -e ./
 
 Download the pretrained models:
 ```
-wget [ADD LINK]
-tar -xvzf pretrained_models_and_data.tar.gz
+wget https://github.com/valeoai/WaffleIron/files/10294733/info_datasets.tar.gz
+tar -xvzf info_datasets.tar.gz
+wget https://github.com/valeoai/WaffleIron/files/10294734/pretrained_nuscenes.tar.gz
+tar -xvzf pretrained_nuscenes.tar.gz
+wget https://github.com/valeoai/WaffleIron/files/10294735/pretrained_kitti.tar.gz
+tar -xvzf pretrained_kitti.tar.gz
 ```
 
 Finally, indicate where the nuScenes and SemanticKITTI datasets are located on your system:
