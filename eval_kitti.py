@@ -147,7 +147,7 @@ if __name__ == "__main__":
             label = label.astype(np.uint32)
             # Save result
             assert batch["filename"][0] == batch["filename"][-1]
-            label_file = batch["filename"][0][len(dataset.rootdir) + len("/dataset"):]
+            label_file = batch["filename"][0][len(dataset.rootdir) + len("/dataset/"):]
             label_file = label_file.replace("velodyne", "predictions")[:-3] + "label"
             label_file = os.path.join(args.result_folder, label_file)
             os.makedirs(os.path.split(label_file)[0], exist_ok=True)
