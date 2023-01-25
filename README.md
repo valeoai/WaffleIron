@@ -8,12 +8,12 @@
 [*Renaud Marlet*<sup>1,2</sup>](http://imagine.enpc.fr/~marletr/)  
 <sup>1</sup>*valeo.ai, France* and <sup>2</sup>*LIGM, Ecole des Ponts, Univ Gustave Eiffel, CNRS, France*.
 
-If you find this code or work useful, please cite the following [paper]():
+If you find this code or work useful, please cite the following [paper](http://arxiv.org/abs/2301.10100):
 ```
 @article{puy23waffleiron,
   title={Using a Waffle Iron for Automotive Point Cloud Semantic Segmentation},
   author={Puy, Gilles and Boulch, Alexandre and Marlet, Renaud},
-  journal={arxiv:2301.xxxx}
+  journal={arxiv:2301.10100}
   year={2023}
 }
 ```
