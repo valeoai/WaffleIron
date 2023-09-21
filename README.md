@@ -20,7 +20,7 @@ If you find this code or work useful, please cite the following [paper](http://a
 
 ## Updates
 
-This work was accepted at ICCV23. The code and trained models were updated on September 29, 2023 to reproduce the scores in the published version. 
+This work was accepted at ICCV23. The code and trained models were updated on September 21, 2023 to reproduce the scores in the published version. 
 
 If you need to access the preliminary trained models you can refer to this [section](#Preliminary-version). Note that those preliminary models are not performing as well as those used in the published version.
 
@@ -39,9 +39,9 @@ Download the trained models:
 ```
 wget https://github.com/valeoai/WaffleIron/files/10294733/info_datasets.tar.gz
 tar -xvzf info_datasets.tar.gz
-wget [UPDATE]
+wget https://github.com/valeoai/WaffleIron/releases/download/v0.2.0/waffleiron_nuscenes.tar.gz
 tar -xvzf waffleiron_nuscenes.tar.gz
-wget [UPDATE]
+wget https://github.com/valeoai/WaffleIron/releases/download/v0.2.0/waffleiron_kitti.tar.gz
 tar -xvzf waffleiron_kitti.tar.gz
 ```
 
