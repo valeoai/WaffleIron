@@ -40,7 +40,6 @@ class TrainingManager:
         class_names=None,
         tensorboard=True,
     ):
-
         # Optim. methods
         self.optim = optim
         self.fp16 = fp16
@@ -121,7 +120,6 @@ class TrainingManager:
                 torch.distributed.gather(t)
 
     def one_epoch(self, training=True):
-
         # Train or eval mode
         if training:
             net = self.net.train()
@@ -150,7 +148,6 @@ class TrainingManager:
             bar_format = "{desc:<5.5}{percentage:3.0f}%|{bar:50}{r_bar}"
             loader = tqdm(loader, bar_format=bar_format)
         for it, batch in enumerate(loader):
-
             # Network inputs
             feat = batch["feat"].cuda(self.rank, non_blocking=True)
             labels = batch["labels_orig"].cuda(self.rank, non_blocking=True)

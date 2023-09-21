@@ -29,13 +29,12 @@ from datasets import LIST_DATASETS, Collate
 
 
 def load_model_config(file):
-    with open(file, "r") as f:
+    with open(file) as f:
         config = yaml.safe_load(f)
     return config
 
 
 def get_train_augmentations(config):
-
     list_of_transf = []
 
     # Two transformations shared across all datasets
@@ -49,8 +48,9 @@ def get_train_augmentations(config):
 
     # Optional augmentations
     for aug_name in config["augmentations"].keys():
-        if aug_name == "rotation_z":
-            list_of_transf.append(tr.Rotation(inplace=True, dim=2))
+        if aug_name == "rotation":
+            for d in config["augmentations"]["rotation"][0]:
+                list_of_transf.append(tr.Rotation(inplace=True, dim=d))
         elif aug_name == "flip_xy":
             list_of_transf.append(tr.RandomApply(tr.FlipXY(inplace=True), prob=2 / 3))
         elif aug_name == "scale":
@@ -63,16 +63,13 @@ def get_train_augmentations(config):
         else:
             raise ValueError("Unknown transformation")
 
-    print("List of transformations:", list_of_transf)
-
     return tr.Compose(list_of_transf)
 
 
 def get_datasets(config, args):
-
     # Shared parameters
     kwargs = {
-        "rootdir": os.path.join("/datasets_local/", args.path_dataset),
+        "rootdir": args.path_dataset,
         "input_feat": config["embedding"]["input_feat"],
         "voxel_size": config["embedding"]["voxel_size"],
         "num_neighbors": config["embedding"]["neighbors"],
@@ -104,7 +101,6 @@ def get_datasets(config, args):
 
 
 def get_dataloader(train_dataset, val_dataset, args):
-
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
         val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset)
@@ -157,7 +153,6 @@ def get_scheduler(optimizer, config, len_train_loader):
 
 
 def distributed_training(gpu, ngpus_per_node, args, config):
-
     # --- Init. distributing training
     args.gpu = gpu
     if args.gpu is not None:
@@ -178,6 +173,7 @@ def distributed_training(gpu, ngpus_per_node, args, config):
         depth=config["waffleiron"]["depth"],
         grid_shape=config["waffleiron"]["grids_size"],
         nb_class=config["classif"]["nb_class"],
+        drop_path_prob=config["waffleiron"]["drop"],
     )
 
     # ---
@@ -243,18 +239,21 @@ def distributed_training(gpu, ngpus_per_node, args, config):
         args.world_size,
         args.fp16,
         LIST_DATASETS.get(args.dataset.lower()).CLASS_NAME,
-        tensorboard=(not args.eval)
+        tensorboard=(not args.eval),
     )
     if args.restart:
         mng.load_state()
     if args.eval:
+        try:
+            model.compress()
+        except:
+            model.module.compress()
         mng.one_epoch(training=False)
     else:
         mng.train()
 
 
 def main(args, config):
-
     # --- Fixed args
     # Device
     args.device = "cuda"
@@ -367,7 +366,6 @@ def get_default_parser():
 
 
 if __name__ == "__main__":
-
     parser = get_default_parser()
     args = parser.parse_args()
     config = load_model_config(args.config)

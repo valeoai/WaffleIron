@@ -90,6 +90,7 @@ class PCDataset(Dataset):
             self.tta = tr.Compose(
                 (
                     tr.Rotation(inplace=True, dim=2),
+                    tr.Rotation(inplace=True, dim=6),
                     tr.RandomApply(tr.FlipXY(inplace=True), prob=2.0 / 3.0),
                     tr.Scale(inplace=True, dims=(0, 1, 2), range=0.1),
                 )
@@ -139,6 +140,8 @@ class PCDataset(Dataset):
             elif type == "radius":
                 r_xyz = np.linalg.norm(pc_orig[:, :3], axis=1, keepdims=True)
                 pc.append(r_xyz)
+            elif type == "xyz":
+                pc.append(pc_orig[:, :3])
             else:
                 raise ValueError(f"Unknown feature: {type}")
         return np.concatenate(pc, 1)
@@ -233,7 +236,6 @@ class Collate:
         assert num_points is None or num_points > 0
 
     def __call__(self, list_data):
-
         # Extract all data
         list_of_data = (list(data) for data in zip(*list_data))
         feat, label_orig, cell_ind, neighbors_emb, upsample, filename = list_of_data

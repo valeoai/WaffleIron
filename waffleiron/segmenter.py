@@ -19,14 +19,26 @@ from .embedding import Embedding
 
 
 class Segmenter(nn.Module):
-    def __init__(self, input_channels, feat_channels, nb_class, depth, grid_shape):
+    def __init__(
+        self,
+        input_channels,
+        feat_channels,
+        nb_class,
+        depth,
+        grid_shape,
+        drop_path_prob=0,
+    ):
         super().__init__()
         # Embedding layer
         self.embed = Embedding(input_channels, feat_channels)
         # WaffleIron backbone
-        self.waffleiron = WaffleIron(feat_channels, depth, grid_shape)
+        self.waffleiron = WaffleIron(feat_channels, depth, grid_shape, drop_path_prob)
         # Classification layer
         self.classif = nn.Conv1d(feat_channels, nb_class, 1)
+
+    def compress(self):
+        self.embed.compress()
+        self.waffleiron.compress()
 
     def forward(self, feats, cell_ind, occupied_cell, neighbors):
         tokens = self.embed(feats, neighbors)

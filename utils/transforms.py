@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-import os
 import torch
 import numpy as np
-from glob import glob
 
 
 class Compose:
@@ -75,6 +72,8 @@ class Rotation(Transformation):
             self.dims = (0, 2)
         elif dim == 0:
             self.dims = (1, 2)
+        elif dim == 6:
+            self.dims = (4, 5)
 
     def __call__(self, pcloud, labels):
         # Build rotation matrix
@@ -132,9 +131,7 @@ class LimitNumPoints(Transformation):
                 center = pc[center : center + 1, self.dims]
             else:
                 center = np.zeros((1, len(self.dims)))
-            idx = np.argsort(np.square(pc[:, self.dims] - center).sum(axis=1))[
-                : self.max_points
-            ]
+            idx = np.argsort(np.square(pc[:, self.dims] - center).sum(axis=1))[:self.max_points]
             pc, labels = pc[idx], labels[idx]
         return pc, labels
 
@@ -188,5 +185,3 @@ class Voxelize(Transformation):
         )
 
         return pc[ind, :], None if labels is None else labels[ind]
-    
-    

@@ -30,7 +30,6 @@ class ClassMapper:
 
 
 class NuScenesSemSeg(PCDataset):
-
     CLASS_NAME = [
         "barrier",
         "bicycle",

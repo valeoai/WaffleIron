@@ -19,7 +19,9 @@ import torch.nn as nn
 from torch import autocast
 
 
-def build_proj_matrix(indices_non_zeros, occupied_cell, batch_size, num_2d_cells):
+def build_proj_matrix(
+    indices_non_zeros, occupied_cell, batch_size, num_2d_cells, inflate_ind, channels
+):
     num_points = indices_non_zeros.shape[1] // batch_size
     matrix_shape = (batch_size, num_2d_cells, num_points)
 
@@ -27,6 +29,7 @@ def build_proj_matrix(indices_non_zeros, occupied_cell, batch_size, num_2d_cells
     inflate = torch.sparse_coo_tensor(
         indices_non_zeros, occupied_cell.reshape(-1), matrix_shape
     ).transpose(1, 2)
+    inflate_ind = inflate_ind.unsqueeze(1).expand(-1, channels, -1)
 
     # Count number of points in each cells (used in flatten step)
     with autocast("cuda", enabled=False):
@@ -39,12 +42,42 @@ def build_proj_matrix(indices_non_zeros, occupied_cell, batch_size, num_2d_cells
     weight_per_point *= occupied_cell.reshape(-1)
     flatten = torch.sparse_coo_tensor(indices_non_zeros, weight_per_point, matrix_shape)
 
-    return {"flatten": flatten, "inflate": inflate}
+    return {"flatten": flatten, "inflate": inflate_ind}
+
+
+class DropPath(nn.Module):
+    """
+    Stochastic Depth
+
+    Original code of this module is at:
+    https://github.com/facebookresearch/dino/blob/main/vision_transformer.py
+    """
+
+    def __init__(self, drop_prob=0.0):
+        super().__init__()
+        self.drop_prob = drop_prob
+        self.keep_prob = 1 - drop_prob
+
+    def extra_repr(self):
+        return f"prob={self.drop_prob}"
+
+    def forward(self, x):
+        if not self.training or self.drop_prob == 0.0:
+            return x
+        # work with diff dim tensors, not just 2D ConvNets
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        random_tensor = self.keep_prob + torch.rand(
+            shape, dtype=x.dtype, device=x.device
+        )
+        random_tensor.floor_()  # binarize
+        output = x.div(self.keep_prob) * random_tensor
+        return output
 
 
 class ChannelMix(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, drop_path_prob):
         super().__init__()
+        self.compressed = False
         self.norm = nn.BatchNorm1d(channels)
         self.mlp = nn.Sequential(
             nn.Conv1d(channels, channels, 1),
@@ -54,15 +87,40 @@ class ChannelMix(nn.Module):
         self.scale = nn.Conv1d(
             channels, channels, 1, bias=False, groups=channels
         )  # Implement LayerScale
+        self.drop_path = DropPath(drop_path_prob)
+
+    def compress(self):
+        # Join Batch norm and first conv
+        norm_weight = self.norm.weight.data / torch.sqrt(
+            self.norm.running_var.data + 1e-05
+        )
+        norm_bias = self.norm.bias.data - norm_weight * self.norm.running_mean.data
+        # Careful the order of the two lines below should not be changed
+        self.mlp[0].bias.data = (
+            self.mlp[0].weight.data[:, :, 0] @ norm_bias + self.mlp[0].bias.data
+        )
+        self.mlp[0].weight.data = self.mlp[0].weight.data * norm_weight[None, :, None]
+        # Join scale and last conv
+        self.mlp[-1].weight.data = self.mlp[-1].weight.data * self.scale.weight.data
+        self.mlp[-1].bias.data = (
+            self.mlp[-1].bias.data * self.scale.weight.data[:, 0, 0]
+        )
+        # Flag
+        self.compressed = True
 
     def forward(self, tokens):
         """tokens <- tokens + LayerScale( MLP( BN(tokens) ) )"""
-        return tokens + self.scale(self.mlp(self.norm(tokens)))
+        if self.compressed:
+            assert not self.training
+            return tokens + self.drop_path(self.mlp(tokens))
+        else:
+            return tokens + self.drop_path(self.scale(self.mlp(self.norm(tokens))))
 
 
 class SpatialMix(nn.Module):
-    def __init__(self, channels, grid_shape):
+    def __init__(self, channels, grid_shape, drop_path_prob):
         super().__init__()
+        self.compressed = False
         self.H, self.W = grid_shape
         self.norm = nn.BatchNorm1d(channels)
         self.ffn = nn.Sequential(
@@ -74,12 +132,27 @@ class SpatialMix(nn.Module):
             channels, channels, 1, bias=False, groups=channels
         )  # Implement LayerScale
         self.grid_shape = grid_shape
+        self.drop_path = DropPath(drop_path_prob)
 
     def extra_repr(self):
         return f"(grid): [{self.grid_shape[0]}, {self.grid_shape[1]}]"
 
-    def forward(self, tokens, sp_mat):
+    def compress(self):
+        # Join scale and last conv
+        self.ffn[-1].weight.data = (
+            self.ffn[-1].weight.data * self.scale.weight.data[..., None]
+        )
+        self.ffn[-1].bias.data = (
+            self.ffn[-1].bias.data * self.scale.weight.data[:, 0, 0]
+        )
+        # Flag
+        self.compressed = True
+
+    def forward_compressed(self, tokens, sp_mat):
         """tokens <- tokens + LayerScale( Inflate( FFN( Flatten( BN(tokens) ) ) )"""
+        # Make sure we are not in training mode
+        assert not self.training
+        # Forward pass
         B, C, N = tokens.shape
         residual = self.norm(tokens)
         # Flatten
@@ -92,28 +165,53 @@ class SpatialMix(nn.Module):
         residual = self.ffn(residual)
         # Inflate
         residual = residual.reshape(B, C, self.H * self.W)
+        residual = torch.gather(residual, 2, sp_mat["inflate"])
+        return tokens + self.drop_path(residual)
+
+    def forward(self, tokens, sp_mat):
+        """tokens <- tokens + LayerScale( Inflate( FFN( Flatten( BN(tokens) ) ) )"""
+        if self.compressed:
+            return self.forward_compressed(tokens, sp_mat)
+        #
+        B, C, N = tokens.shape
+        residual = self.norm(tokens)
+        # Flatten
         with autocast("cuda", enabled=False):
             residual = torch.bmm(
-                sp_mat["inflate"], residual.transpose(1, 2).float()
+                sp_mat["flatten"], residual.transpose(1, 2).float()
             ).transpose(1, 2)
-        residual = residual.reshape(B, C, N)
-        return tokens + self.scale(residual)
+        residual = residual.reshape(B, C, self.H, self.W)
+        # FFN
+        residual = self.ffn(residual)
+        # LayerScale
+        residual = residual.reshape(B, C, self.H * self.W)
+        residual = self.scale(residual)
+        # Inflate
+        residual = torch.gather(residual, 2, sp_mat["inflate"])
+        return tokens + self.drop_path(residual)
 
 
 class WaffleIron(nn.Module):
-    def __init__(self, channels, depth, grids_shape):
+    def __init__(self, channels, depth, grids_shape, drop_path_prob):
         super().__init__()
+        self.depth = depth
         self.grids_shape = grids_shape
-        self.channel_mix = nn.ModuleList([ChannelMix(channels) for _ in range(depth)])
+        self.channel_mix = nn.ModuleList(
+            [ChannelMix(channels, drop_path_prob) for _ in range(depth)]
+        )
         self.spatial_mix = nn.ModuleList(
             [
-                SpatialMix(channels, grids_shape[d % len(grids_shape)])
+                SpatialMix(channels, grids_shape[d % len(grids_shape)], drop_path_prob)
                 for d in range(depth)
             ]
         )
 
-    def forward(self, tokens, cell_ind, occupied_cell):
+    def compress(self):
+        for d in range(self.depth):
+            self.channel_mix[d].compress()
+            self.spatial_mix[d].compress()
 
+    def forward(self, tokens, cell_ind, occupied_cell):
         # Build projection matrices
         batch_size, num_points = tokens.shape[0], tokens.shape[-1]
         point_ind = (
@@ -134,8 +232,15 @@ class WaffleIron(nn.Module):
                 torch.cat((batch_ind, cell_ind[:, i].reshape(1, -1), point_ind), axis=0)
             )
         sp_mat = [
-            build_proj_matrix(id, occupied_cell, batch_size, np.prod(sh))
-            for id, sh in zip(non_zeros_ind, self.grids_shape)
+            build_proj_matrix(
+                id,
+                occupied_cell,
+                batch_size,
+                np.prod(sh),
+                cell_ind[:, i],
+                tokens.shape[1],
+            )
+            for i, (id, sh) in enumerate(zip(non_zeros_ind, self.grids_shape))
         ]
 
         # Actual backbone
