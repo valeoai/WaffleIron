@@ -27,12 +27,13 @@ class Segmenter(nn.Module):
         depth,
         grid_shape,
         drop_path_prob=0,
+        layer_norm=False,
     ):
         super().__init__()
         # Embedding layer
         self.embed = Embedding(input_channels, feat_channels)
         # WaffleIron backbone
-        self.waffleiron = WaffleIron(feat_channels, depth, grid_shape, drop_path_prob)
+        self.waffleiron = WaffleIron(feat_channels, depth, grid_shape, drop_path_prob, layer_norm)
         # Classification layer
         self.classif = nn.Conv1d(feat_channels, nb_class, 1)
 
