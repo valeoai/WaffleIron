@@ -29,7 +29,10 @@ If you need to access the preliminary trained models you can refer to this [sect
 
 Setup the environment and clone this repo:
 ```
-pip install pyaml==6.0 tqdm=4.63.0 scipy==1.8.0 torch==1.11.0 tensorboard=2.8.0
+conda create -n waffleiron
+conda activate waffleiron
+conda install pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch
+pip install pyaml==23.12.0 tqdm==4.63.0 scipy==1.8.0 tensorboard==2.8.0
 git clone https://github.com/valeoai/WaffleIron
 cd WaffleIron
 pip install -e ./
