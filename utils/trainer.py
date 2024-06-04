@@ -170,7 +170,7 @@ class TrainingManager:
                 # Upsample to original resolution
                 out_upsample = []
                 for id_b, closest_point in enumerate(batch["upsample"]):
-                    temp = out[id_b, :, closest_point]
+                    temp = out[id_b, :, closest_point.long()]
                     out_upsample.append(temp.T)
                 out = torch.cat(out_upsample, dim=0)
                 # Loss
