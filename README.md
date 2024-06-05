@@ -67,6 +67,7 @@ python launch_train.py \
 --eval
 ```
 This should give you a final mIoU of 77.6%.
+Note: for single-GPU validation, you can add the argument `--gpu 0`.
 
 To evaluate the SemanticKITTI trained model, type
 ```
