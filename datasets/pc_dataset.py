@@ -262,7 +262,7 @@ class Collate:
         ).long()  # B x nb_2d_cells x Nmax
         occupied_cells = torch.from_numpy(np.vstack(occupied_cells)).float()  # B x Nmax
         labels_orig = torch.from_numpy(np.hstack(label_orig)).long()
-        upsample = [torch.from_numpy(u) for u in upsample]
+        upsample = [torch.from_numpy(u).long() for u in upsample]
 
         # Prepare output variables
         out = {
