@@ -5,6 +5,10 @@
 /*.egg-info
 /*.egg
 
+# Checkpoints
+logs/
+pretrained_models/
+
 # Data
 *.npy
 *.npz

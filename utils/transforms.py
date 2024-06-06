@@ -152,7 +152,7 @@ class Crop(Transformation):
         pc, labels = super().__call__(pcloud, labels)
 
         where = None
-        for i, d in enumerate(self.dims):  # Actually a bug below, use d in pc not i!
+        for i, d in enumerate(self.dims):
             temp = (pc[:, d] > self.fov[0][i] + self.eps) & (
                 pc[:, d] < self.fov[1][i] - self.eps
             )

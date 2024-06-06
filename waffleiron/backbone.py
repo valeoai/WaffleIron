@@ -13,11 +13,18 @@
 # limitations under the License.
 
 
+import os
 import torch
 import warnings
-import numpy as np
 import torch.nn as nn
-from torch import autocast
+
+from waffleiron import WI_SCATTER_REDUCE
+if WI_SCATTER_REDUCE:
+    from .helper_projection import projection_3d_to_2d_scatter_reduce as projection_3d_to_2d
+    from .helper_projection import get_all_projections_scatter_reduce as get_all_projections
+else:
+    from .helper_projection import projection_3d_to_2d_sparse_matrix as projection_3d_to_2d
+    from .helper_projection import get_all_projections_sparse_matrices as get_all_projections
 
 
 class myLayerNorm(nn.LayerNorm):
@@ -26,32 +33,6 @@ class myLayerNorm(nn.LayerNorm):
 
     def forward(self, x):
         return super().forward(x.transpose(1, -1)).transpose(1, -1)
-
-
-def build_proj_matrix(
-    indices_non_zeros, occupied_cell, batch_size, num_2d_cells, inflate_ind, channels
-):
-    num_points = indices_non_zeros.shape[1] // batch_size
-    matrix_shape = (batch_size, num_2d_cells, num_points)
-
-    # Sparse projection matrix for Inflate step
-    inflate = torch.sparse_coo_tensor(
-        indices_non_zeros, occupied_cell.reshape(-1), matrix_shape
-    ).transpose(1, 2)
-    inflate_ind = inflate_ind.unsqueeze(1).expand(-1, channels, -1)
-
-    # Count number of points in each cells (used in flatten step)
-    with autocast("cuda", enabled=False):
-        num_points_per_cells = torch.bmm(
-            inflate, torch.bmm(inflate.transpose(1, 2), occupied_cell.unsqueeze(-1))
-        )
-
-    # Sparse projection matrix for Flatten step (projection & average in each 2d cells)
-    weight_per_point = 1.0 / (num_points_per_cells.reshape(-1) + 1e-6)
-    weight_per_point *= occupied_cell.reshape(-1)
-    flatten = torch.sparse_coo_tensor(indices_non_zeros, weight_per_point, matrix_shape)
-
-    return {"flatten": flatten, "inflate": inflate_ind}
 
 
 class DropPath(nn.Module):
@@ -104,8 +85,7 @@ class ChannelMix(nn.Module):
 
     def compress(self):
         if self.layer_norm:
-            warnings.warn("Compression of ChannelMix layer in WaffleIron has not been implemented with layer norm.")
-            return
+            raise Exception("Compression of ChannelMix layer in WaffleIron has not been implemented with layer norm.")
         # Join Batch norm and first conv
         norm_weight = self.norm.weight.data / torch.sqrt(
             self.norm.running_var.data + 1e-05
@@ -175,10 +155,7 @@ class SpatialMix(nn.Module):
         B, C, N = tokens.shape
         residual = self.norm(tokens)
         # Flatten
-        with autocast("cuda", enabled=False):
-            residual = torch.bmm(
-                sp_mat["flatten"], residual.transpose(1, 2).float()
-            ).transpose(1, 2)
+        residual = projection_3d_to_2d(residual, sp_mat, B, C, self.H, self.W)
         residual = residual.reshape(B, C, self.H, self.W)
         # FFN
         residual = self.ffn(residual)
@@ -195,10 +172,7 @@ class SpatialMix(nn.Module):
         B, C, N = tokens.shape
         residual = self.norm(tokens)
         # Flatten
-        with autocast("cuda", enabled=False):
-            residual = torch.bmm(
-                sp_mat["flatten"], residual.transpose(1, 2).float()
-            ).transpose(1, 2)
+        residual = projection_3d_to_2d(residual, sp_mat, B, C, self.H, self.W)
         residual = residual.reshape(B, C, self.H, self.W)
         # FFN
         residual = self.ffn(residual)
@@ -231,36 +205,12 @@ class WaffleIron(nn.Module):
             self.spatial_mix[d].compress()
 
     def forward(self, tokens, cell_ind, occupied_cell):
-        # Build projection matrices
-        batch_size, num_points = tokens.shape[0], tokens.shape[-1]
-        point_ind = (
-            torch.arange(num_points, device=tokens.device)
-            .unsqueeze(0)
-            .expand(batch_size, -1)
-            .reshape(1, -1)
+        # Build all 3D to 2D projection matrices
+        batch_size, nb_feat, num_points = tokens.shape
+        sp_mat = get_all_projections(
+            cell_ind, nb_feat, batch_size, num_points, 
+            occupied_cell, tokens.device, self.grids_shape,
         )
-        batch_ind = (
-            torch.arange(batch_size, device=tokens.device)
-            .unsqueeze(1)
-            .expand(-1, num_points)
-            .reshape(1, -1)
-        )
-        non_zeros_ind = []
-        for i in range(cell_ind.shape[1]):
-            non_zeros_ind.append(
-                torch.cat((batch_ind, cell_ind[:, i].reshape(1, -1), point_ind), axis=0)
-            )
-        sp_mat = [
-            build_proj_matrix(
-                id,
-                occupied_cell,
-                batch_size,
-                np.prod(sh),
-                cell_ind[:, i],
-                tokens.shape[1],
-            )
-            for i, (id, sh) in enumerate(zip(non_zeros_ind, self.grids_shape))
-        ]
 
         # Actual backbone
         for d, (smix, cmix) in enumerate(zip(self.spatial_mix, self.channel_mix)):

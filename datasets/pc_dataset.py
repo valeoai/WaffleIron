@@ -257,9 +257,7 @@ class Collate:
         # Concatenate along batch dimension
         feat = torch.from_numpy(np.vstack(feat)).float()  # B x C x Nmax
         neighbors_emb = torch.from_numpy(np.vstack(neighbors_emb)).long()  # B x Nmax
-        cell_ind = torch.from_numpy(
-            np.vstack(cell_ind)
-        ).long()  # B x nb_2d_cells x Nmax
+        cell_ind = torch.from_numpy(np.vstack(cell_ind)).long()  # B x nb_2d_cells x Nmax
         occupied_cells = torch.from_numpy(np.vstack(occupied_cells)).float()  # B x Nmax
         labels_orig = torch.from_numpy(np.hstack(label_orig)).long()
         upsample = [torch.from_numpy(u).long() for u in upsample]

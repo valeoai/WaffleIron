@@ -18,21 +18,31 @@ If you find this code or work useful, please cite the following [paper](http://a
 }
 ```
 
-## Updates
+## Main updates
 
-This work was accepted at ICCV23. The code and trained models were updated on September 21, 2023 to reproduce the scores in the published version. 
-
-If you need to access the preliminary trained models you can refer to this [section](#Preliminary-version). Note that those preliminary models are not performing as well as those used in the published version.
+- **[Jun. 06, 2024]** The code is now compatible with `pytorch>=2.0` thanks to a new implementation of the 3D to 2D projection. 
+- **[Sep. 21, 2023]** This work was accepted at ICCV23. The code and trained models were updated on September 21, 2023 to allow reproduction of the scores in the published version. If you need to access the preliminary trained models you can refer to this [section](#Preliminary-version). Note that those preliminary models are not performing as well as those used in the published version.
 
 
 ## Installation
 
-Setup the environment and clone this repo:
+We use the following environment:
 ```
 conda create -n waffleiron
 conda activate waffleiron
 conda install pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch
-pip install pyaml==23.12.0 tqdm==4.63.0 scipy==1.8.0 tensorboard==2.8.0
+pip install pyaml==23.12.0 tqdm==4.63.0 scipy==1.8.0 tensorboard==2.16.2
+git clone https://github.com/valeoai/WaffleIron
+cd WaffleIron
+pip install -e ./
+```
+
+Alternatively, the code was updated on June 6, 2024 to make it compatible with `pytorch>=2.0`. You should able to use the following environment. In case of problem with this environment, please inform us by reporting an issue.
+```
+conda create -n waffleiron
+conda activate waffleiron
+conda install pytorch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 pytorch-cuda=12.1 -c pytorch -c nvidia
+pip install pyaml==23.12.0 tqdm==4.63.0 scipy==1.13.1 tensorboard==2.16.2
 git clone https://github.com/valeoai/WaffleIron
 cd WaffleIron
 pip install -e ./
@@ -63,12 +73,13 @@ python launch_train.py \
 --log_path ./pretrained_models/WaffleIron-48-384__nuscenes/ \
 --config ./configs/WaffleIron-48-384__nuscenes.yaml \
 --fp16 \
+--multiprocessing-distributed \
 --restart \
 --eval
 ```
 This should give you a final mIoU of 77.6%.
 
-**Remark**: If your model was trained with the argument `--gpu 0`, you must add the argument `--gpu 0` for evaluation with the above command.
+**Remark**: *If your model was trained on one gpu with the argument `--gpu 0`, replace `--multiprocessing-distributed` with `--gpu 0` for evaluation with the above command.*
 
 To evaluate the SemanticKITTI trained model, type
 ```
@@ -78,6 +89,7 @@ python launch_train.py \
 --log_path ./pretrained_models/WaffleIron-48-256__kitti/ \
 --config ./configs/WaffleIron-48-256__kitti.yaml \
 --fp16 \
+--multiprocessing-distributed \
 --restart \
 --eval
 ```
@@ -167,7 +179,7 @@ python launch_train.py \
 
 We used the checkpoint at the *last* training epoch to report the results.
 
-Note: for single-GPU training, you can remove `--multiprocessing-distributed` and add the argument `--gpu 0`.
+**Remark**: *For single-GPU training, you can remove `--multiprocessing-distributed` and add the argument `--gpu 0`.*
 
 
 ### SemanticKITTI
