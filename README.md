@@ -48,10 +48,14 @@ cd WaffleIron
 pip install -e ./
 ```
 
-Download the trained models:
+Download the config files for nuScenes:
 ```
 wget https://github.com/valeoai/WaffleIron/files/10294733/info_datasets.tar.gz
 tar -xvzf info_datasets.tar.gz
+```
+
+Download the trained models:
+```
 wget https://github.com/valeoai/WaffleIron/releases/download/v0.2.0/waffleiron_nuscenes.tar.gz
 tar -xvzf waffleiron_nuscenes.tar.gz
 wget https://github.com/valeoai/WaffleIron/releases/download/v0.2.0/waffleiron_kitti.tar.gz
