@@ -34,6 +34,11 @@ class myLayerNorm(nn.LayerNorm):
     def forward(self, x):
         return super().forward(x.transpose(1, -1)).transpose(1, -1)
 
+NORM_OPTIONS = {
+	"batchnorm": nn.BatchNorm1d,
+	"layernorm": myLayerNorm,
+}
+
 
 class DropPath(nn.Module):
     """
@@ -65,14 +70,11 @@ class DropPath(nn.Module):
 
 
 class ChannelMix(nn.Module):
-    def __init__(self, channels, drop_path_prob, layer_norm=False):
+    def __init__(self, channels, drop_path_prob, which_norm="batchnorm"):
         super().__init__()
         self.compressed = False
-        self.layer_norm = layer_norm
-        if layer_norm:
-           self.norm = myLayerNorm(channels)
-        else:
-           self.norm = nn.BatchNorm1d(channels)
+        self.which_norm = which_norm
+        self.norm = NORM_OPTIONS[which_norm](channels)
         self.mlp = nn.Sequential(
             nn.Conv1d(channels, channels, 1),
             nn.ReLU(inplace=True),
@@ -84,8 +86,12 @@ class ChannelMix(nn.Module):
         self.drop_path = DropPath(drop_path_prob)
 
     def compress(self):
-        if self.layer_norm:
-            raise Exception("Compression of ChannelMix layer in WaffleIron has not been implemented with layer norm.")
+        if self.which_norm == "layernorm":
+            warnings.warn(
+                "Compression of ChannelMix layer has not been implemented " +
+                "with layer norm. Skipping compression."
+            )
+            return
         # Join Batch norm and first conv
         norm_weight = self.norm.weight.data / torch.sqrt(
             self.norm.running_var.data + 1e-05
@@ -114,14 +120,11 @@ class ChannelMix(nn.Module):
 
 
 class SpatialMix(nn.Module):
-    def __init__(self, channels, grid_shape, drop_path_prob, layer_norm=False):
+    def __init__(self, channels, grid_shape, drop_path_prob, which_norm="batchnorm"):
         super().__init__()
         self.compressed = False
         self.H, self.W = grid_shape
-        if layer_norm:
-            self.norm = myLayerNorm(channels)
-        else:
-            self.norm = nn.BatchNorm1d(channels)
+        self.norm = NORM_OPTIONS[which_norm](channels)
         self.ffn = nn.Sequential(
             nn.Conv2d(channels, channels, 3, padding=1, groups=channels),
             nn.ReLU(inplace=True),
@@ -185,16 +188,16 @@ class SpatialMix(nn.Module):
 
 
 class WaffleIron(nn.Module):
-    def __init__(self, channels, depth, grids_shape, drop_path_prob, layer_norm=False):
+    def __init__(self, channels, depth, grids_shape, drop_path_prob, which_norm="batchnorm"):
         super().__init__()
         self.depth = depth
         self.grids_shape = grids_shape
         self.channel_mix = nn.ModuleList(
-            [ChannelMix(channels, drop_path_prob, layer_norm) for _ in range(depth)]
+            [ChannelMix(channels, drop_path_prob, which_norm) for _ in range(depth)]
         )
         self.spatial_mix = nn.ModuleList(
             [
-                SpatialMix(channels, grids_shape[d % len(grids_shape)], drop_path_prob, layer_norm)
+                SpatialMix(channels, grids_shape[d % len(grids_shape)], drop_path_prob, which_norm)
                 for d in range(depth)
             ]
         )
@@ -209,7 +212,7 @@ class WaffleIron(nn.Module):
         batch_size, nb_feat, num_points = tokens.shape
         sp_mat = get_all_projections(
             cell_ind, nb_feat, batch_size, num_points, 
-            occupied_cell, tokens.device, self.grids_shape,
+            occupied_cell, tokens.device, self.grids_shape, tokens.dtype,
         )
 
         # Actual backbone

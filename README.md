@@ -20,6 +20,7 @@ If you find this code or work useful, please cite the following [paper](http://a
 
 ## Main updates
 
+- **[Dec. 12, 2024]** Modified the implementation of the 3D to 2D projection for `pytorch>=2.0`. The previous version could cause numerical instabilities with mixed precision.
 - **[Jun. 06, 2024]** The code is now compatible with `pytorch>=2.0` thanks to a new implementation of the 3D to 2D projection. 
 - **[Sep. 21, 2023]** This work was accepted at ICCV23. The code and trained models were updated on September 21, 2023 to allow reproduction of the scores in the published version. If you need to access the preliminary trained models you can refer to this [section](#Preliminary-version). Note that those preliminary models are not performing as well as those used in the published version.
 
@@ -79,11 +80,13 @@ python launch_train.py \
 --fp16 \
 --multiprocessing-distributed \
 --restart \
+--compress \
 --eval
 ```
 This should give you a final mIoU of 77.6%.
 
-**Remark**: *If your model was trained on one gpu with the argument `--gpu 0`, replace `--multiprocessing-distributed` with `--gpu 0` for evaluation with the above command.*
+**Remark 1**: *If your model was trained on one gpu with the argument `--gpu 0`, replace `--multiprocessing-distributed` with `--gpu 0` for evaluation with the above command.*
+**Remark 2**: *The argument `--compress` is optional. It is used for faster inference by regrouping, e.g., successive batchnorm and linear layers in a single linear layer.*
 
 To evaluate the SemanticKITTI trained model, type
 ```
@@ -95,6 +98,7 @@ python launch_train.py \
 --fp16 \
 --multiprocessing-distributed \
 --restart \
+--compress \
 --eval
 ```
 This should give you a final mIoU of 68.0%.

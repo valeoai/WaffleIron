@@ -174,6 +174,7 @@ def distributed_training(gpu, ngpus_per_node, args, config):
         grid_shape=config["waffleiron"]["grids_size"],
         nb_class=config["classif"]["nb_class"],
         drop_path_prob=config["waffleiron"]["drop"],
+        which_norm=config["waffleiron"].get("which_norm", None),
     )
 
     # ---
@@ -244,10 +245,11 @@ def distributed_training(gpu, ngpus_per_node, args, config):
     if args.restart:
         mng.load_state()
     if args.eval:
-        try:
-            model.compress()
-        except:
-            model.module.compress()
+        if args.compress:
+            if hasattr(model, "module"):
+                model.module.compress()
+            else:
+                model.compress()
         mng.one_epoch(training=False)
     else:
         mng.train()
@@ -360,6 +362,12 @@ def get_default_parser():
         action="store_true",
         default=False,
         help="Run validation only",
+    )
+    parser.add_argument(
+        "--compress",
+        action="store_true",
+        default=False,
+        help="Merge normalization layer with preceding or succeding convolutional layer",
     )
 
     return parser

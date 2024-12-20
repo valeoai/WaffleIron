@@ -27,8 +27,8 @@ def projection_3d_to_2d_scatter_reduce(feat, sp_mat, B, C, H, W):
     residual.scatter_reduce_(
         2, 
         sp_mat["inflate"], 
-        feat, 
-        "mean", 
+        feat * sp_mat["mask_zero_padding"], 
+        "sum", 
         include_self=False,
     )
     
@@ -46,17 +46,31 @@ def projection_3d_to_2d_sparse_matrix(feat, sp_mat, *args, **kwargs):
 
 
 def get_all_projections_scatter_reduce(
-    cell_ind, nb_feat, *args, **kwargs
+    cell_ind, nb_feat, batch_size, num_points, occupied_cell, device, grids_shape, dtype,
 ):
-    sp_mat = [
-        {"inflate": cell_ind[:, i:i+1].expand(-1, nb_feat, -1)}
-        for i in range(cell_ind.shape[1])
-    ]
+    sp_mat = []
+    B, C = batch_size, nb_feat
+    occupied_cell = occupied_cell.unsqueeze(1).to(dtype)
+    temp_mask = torch.ones_like(occupied_cell)
+    for i in range(cell_ind.shape[1]):
+        # Pre-compute number of points falling in each 2D cells
+        temp_sp_mat = {"inflate": cell_ind[:, i:i+1], "mask_zero_padding": temp_mask}
+        num_points_per_cell = projection_3d_to_2d_scatter_reduce(
+            occupied_cell, temp_sp_mat, B, 1, *grids_shape[i],
+        )
+        num_points_per_cell = torch.gather(
+            num_points_per_cell, 2, temp_sp_mat["inflate"],
+        )
+        # Store projection information
+        sp_mat += [dict()]
+        sp_mat[i]["mask_zero_padding"] = occupied_cell / (num_points_per_cell + 1e-6)
+        sp_mat[i]["inflate"] = cell_ind[:, i:i+1].expand(-1, C, -1)
+    
     return sp_mat
 
 
 def get_all_projections_sparse_matrices(
-    cell_ind, nb_feat, batch_size, num_points, occupied_cell, device, grids_shape
+    cell_ind, nb_feat, batch_size, num_points, occupied_cell, device, grids_shape, *args, **kwargs,
 ):
     point_ind = (
         torch.arange(num_points, device=device)

@@ -130,7 +130,7 @@ class InstanceCutMix:
                 object = self.bank[id_class][which_one[ii]]
                 object = np.fromfile(object, dtype=np.float32).reshape((-1, 4))
                 # Augment instance
-                label = np.ones((object.shape[0],), dtype=np.int) * id_class
+                label = np.ones((object.shape[0],), dtype=np.int32) * id_class
                 object, label = self.rot(object, label)
                 # Move instance at point p
                 object[:, :3] += p[:3][None]
