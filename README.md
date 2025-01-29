@@ -20,9 +20,9 @@ If you find this code or work useful, please cite the following [paper](http://a
 
 ## Main updates
 
-- **[Dec. 20, 2024]** Modified the implementation of the 3D to 2D projection for `pytorch>=2.0`. The previous version could cause numerical instabilities with mixed precision.
-- **[Jun. 06, 2024]** The code is now compatible with `pytorch>=2.0` thanks to a new implementation of the 3D to 2D projection. 
-- **[Sep. 21, 2023]** This work was accepted at ICCV23. The code and trained models were updated on September 21, 2023 to allow reproduction of the scores in the published version. If you need to access the preliminary trained models you can refer to this [section](#Preliminary-version). Note that those preliminary models are not performing as well as those used in the published version.
+- **[Dec. 20, 2024]** *(v0.3.1)* Modified the implementation of the 3D to 2D projection for `pytorch>=2.0`. The previous version could cause numerical instabilities with mixed precision.
+- **[Jun. 06, 2024]** *(v0.3.0)* The code is now compatible with `pytorch>=2.0` thanks to a new implementation of the 3D to 2D projection. 
+- **[Sep. 21, 2023]** *(v0.2.0)* This work was accepted at ICCV23. The code and trained models were updated on September 21, 2023 to allow reproduction of the scores in the published version. If you need to access the preliminary trained models you can refer to this [section](#Preliminary-version). Note that those preliminary models are not performing as well as those used in the published version.
 
 
 ## Installation

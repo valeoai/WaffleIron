@@ -35,4 +35,4 @@ from .segmenter import Segmenter
 
 
 __all__ = [WaffleIron, Segmenter]
-__version__ = "0.3.0"
+__version__ = "0.3.1"
